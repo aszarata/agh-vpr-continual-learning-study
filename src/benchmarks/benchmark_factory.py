@@ -4,50 +4,35 @@ from avalanche.benchmarks.utils import AvalancheDataset
 
 from src.benchmarks.datasets.classification import ImageClassificationDataset
 from src.benchmarks.datasets.image_retrieval import ImageRetrievalDataset
+from src.scenarios.task_splitters import TaskConfig
 
 class BenchmarkFactory:
     def __init__(self, root_dir: str, image_size: int):
         self.root_dir = root_dir
         self.image_size = image_size
 
-    def build_img_classification_benchmark(
-        self, 
-        train_paths: List[List[str]], 
-        train_labels: List[List[int]],
-        test_paths: List[List[str]], 
-        test_labels: List[List[int]],
-    ):
-        
-        train_configs = [{"image_paths": p, "labels": l} for p, l in zip(train_paths, train_labels)]
-        test_configs = [{"image_paths": p, "labels": l} for p, l in zip(test_paths, test_labels)]
+    def build_img_classification_benchmark(self, configs: List[TaskConfig]):
+        train_configs = [{"image_paths": task.train_paths, "labels": task.train_labels} for task in configs]
+        test_configs = [{"image_paths": task.test_paths, "labels": task.test_labels} for task in configs]
         
         return self.__build_generic_benchmark(ImageClassificationDataset, train_configs, test_configs)
     
-    def build_img_retrieval_benchmark(
-        self, 
-        train_paths: List[List[str]], 
-        train_labels: List[List[int]],
-        test_paths: List[List[str]], 
-        test_labels: List[List[int]],
-        train_coords: List[List[Tuple[float]]] = None,
-        test_coords: List[List[Tuple[float]]] = None,
-        simmilarity_strategy: str = "class"
-    ):
+    def build_img_retrieval_benchmark(self, configs: List[TaskConfig], simmilarity_strategy: str = "class"):
         train_configs = [
             {
-                "image_paths": p, 
-                "labels": l, 
-                "coordinates": c, 
+                "image_paths": task.train_paths, 
+                "labels": task.train_labels, 
+                "coordinates": task.train_coords, 
                 "strategy": simmilarity_strategy
-            } for p, l, c in zip(train_paths, train_labels, train_coords or [None]*len(train_paths))
+            } for task in configs
         ]
         test_configs = [
             {
-                "image_paths": p, 
-                "labels": l, 
-                "coordinates": c, 
+                "image_paths": task.test_paths, 
+                "labels": task.test_labels, 
+                "coordinates": task.test_coords, 
                 "strategy": simmilarity_strategy
-            } for p, l, c in zip(test_paths, test_labels, test_coords or [None]*len(test_paths))
+            } for task in configs
         ]
         
         return self.__build_generic_benchmark(ImageRetrievalDataset, train_configs, test_configs)
