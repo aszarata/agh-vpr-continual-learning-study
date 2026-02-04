@@ -1,7 +1,6 @@
 from typing import List, Tuple
-from torch.utils.data import random_split
 from avalanche.benchmarks.scenarios.dataset_scenario import benchmark_from_datasets
-from avalanche.benchmarks.utils import AvalancheDataset
+from avalanche.benchmarks.utils import as_classification_dataset, AvalancheDataset
 
 from src.benchmarks.datasets.classification import ImageClassificationDataset
 from src.benchmarks.datasets.image_retrieval import ImageRetrievalDataset
@@ -20,9 +19,22 @@ class BenchmarkFactory:
                 "labels": task.train_labels, 
             } for task in configs
         ]
-        test_configs = [{"image_paths": task.test_paths, "labels": task.test_labels} for task in configs]
+
+        val_configs = [
+            {
+                "image_paths": task.val_paths, 
+                "labels": task.val_labels
+            } for task in configs
+        ]
+
+        test_configs = [
+            {
+                "image_paths": task.test_paths, 
+                "labels": task.test_labels
+            } for task in configs
+        ]
         
-        return self.__build_generic_benchmark(ImageClassificationDataset, train_configs, test_configs)
+        return self.__build_generic_benchmark(ImageClassificationDataset, train_configs, val_configs, test_configs)
     
     def build_img_retrieval_benchmark(self, configs: List[TaskConfig], simmilarity_strategy: str = "class"):
         train_configs = [
@@ -33,6 +45,16 @@ class BenchmarkFactory:
                 "strategy": simmilarity_strategy,
             } for task in configs
         ]
+
+        val_configs = [
+            {
+                "image_paths": task.val_paths, 
+                "labels": task.val_labels, 
+                "coordinates": task.val_coords, 
+                "strategy": simmilarity_strategy
+            } for task in configs
+        ]
+
         test_configs = [
             {
                 "image_paths": task.test_paths, 
@@ -42,14 +64,14 @@ class BenchmarkFactory:
             } for task in configs
         ]
         
-        return self.__build_generic_benchmark(ImageRetrievalDataset, train_configs, test_configs)
+        return self.__build_generic_benchmark(ImageRetrievalDataset, train_configs, val_configs, test_configs)
     
-    def __build_generic_benchmark(self, dataset_class, train_configs, test_configs):
+    def __build_generic_benchmark(self, dataset_class, train_configs, val_configs, test_configs):
         train_datasets = []
         valid_datasets = []
         test_datasets = []
 
-        for train_cfg, test_cfg in zip(train_configs, test_configs):
+        for train_cfg, val_cfg, test_cfg in zip(train_configs, val_configs, test_configs):
             
             train_ds = dataset_class(
                 root_dir=self.root_dir,
@@ -57,20 +79,24 @@ class BenchmarkFactory:
                 **train_cfg
             )
 
-            train_ds, val_ds = random_split(train_ds, [0.85, 0.15])
+            train_datasets.append(as_classification_dataset(train_ds))
 
-            train_datasets.append(AvalancheDataset(train_ds))
-            valid_datasets.append(AvalancheDataset(val_ds))
+            val_ds = dataset_class(
+                root_dir=self.root_dir,
+                img_size=self.image_size,
+                **val_cfg
+            )
+            valid_datasets.append(as_classification_dataset(val_ds))
 
             test_ds = dataset_class(
                 root_dir=self.root_dir,
                 img_size=self.image_size,
                 **test_cfg
             )
-            test_datasets.append(AvalancheDataset(test_ds))
+            test_datasets.append(as_classification_dataset(test_ds))
 
         return benchmark_from_datasets(
-            train_datasets=train_datasets,
-            test_datasets=test_datasets,
-            valid_datasets=valid_datasets,
+            train=train_datasets,
+            test=test_datasets,
+            valid=valid_datasets,
         )

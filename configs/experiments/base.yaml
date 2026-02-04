@@ -1,0 +1,13 @@
+experiment_name: camera-domain-all-separate-base-01
+model: resnet35
+num_epochs: 40
+batch_size: 16
+
+strategies:
+  - Naive
+  - EWC
+  - Replay
+
+plugins:
+  -EarlyStopping
+  -LRSchedulerPlugin

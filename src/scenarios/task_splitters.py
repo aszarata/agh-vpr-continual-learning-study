@@ -1,55 +1,42 @@
 from dataclasses import dataclass
-from typing import Dict, List, Any
+from typing import List, Tuple
 import numpy as np
 import pandas as pd
-
 from src.settings import *
 
 @dataclass
 class TaskConfig:
-    train_paths: List[int]
-    test_paths: List[int]
+    train_paths: List[str]
+    val_paths: List[str]
+    test_paths: List[str]
     train_labels: List[int]
+    val_labels: List[int]
     test_labels: List[int]
-    train_coords: List[int]
-    test_coords: List[int]
-
+    train_coords: List[Tuple[float]]
+    val_coords: List[Tuple[float]]
+    test_coords: List[Tuple[float]]
 
 class TaskSplitter:
     def __init__(
         self, 
         group_by: str, 
         keys_per_task: List[List[str|int]] = None, 
-        train_test_split: List[float] | List[str] = [0.8, 0.2],
-        shuffle = True
+        split_ratios: List[float] = [0.7, 0.15, 0.15],
+        shuffle: bool = True
     ):
         self.group_by = group_by
         self.keys_per_task = keys_per_task
-        self.train_test_split = train_test_split
+        self.split_ratios = split_ratios
         self.shuffle = shuffle
 
     def split(self, df: pd.DataFrame) -> List[TaskConfig]:
         if self.keys_per_task is None:
-            return self._create_tasks_for_all_keys(df)
-        return self._create_multiple_tasks(df)
-
-    def _create_tasks_for_all_keys(self, df: pd.DataFrame) -> List[TaskConfig]:
-        unique_keys = df[self.group_by].unique()
-        if self.shuffle:
-            np.random.shuffle(unique_keys)
-        
-        task_configs = []
-        for key in unique_keys:
-            task_config = self._create_task_for_keys(df, [key])
-            task_configs.append(task_config)
-        return task_configs
-
-    def _create_multiple_tasks(self, df: pd.DataFrame) -> List[TaskConfig]:
-        task_configs = []
-        for keys in self.keys_per_task:
-            task_config = self._create_task_for_keys(df, keys)
-            task_configs.append(task_config)
-        return task_configs
+            unique_keys = df[self.group_by].unique()
+            if self.shuffle:
+                np.random.shuffle(unique_keys)
+            self.keys_per_task = [[key] for key in unique_keys]
+            
+        return [self._create_task_for_keys(df, keys) for keys in self.keys_per_task]
 
     def _create_task_for_keys(self, df: pd.DataFrame, keys: List[str|int]) -> TaskConfig:
         task_df = df[df[self.group_by].isin(keys)]
@@ -57,20 +44,22 @@ class TaskSplitter:
         if self.shuffle:
             task_df = task_df.sample(frac=1).reset_index(drop=True)
         
-        split_idx = self._calculate_split_point(len(task_df))
-        
-        train_df = task_df.iloc[:split_idx]
-        test_df = task_df.iloc[split_idx:]
+        n = len(task_df)
+        train_end = int(n * self.split_ratios[0])
+        val_end = int(n * (self.split_ratios[0] + self.split_ratios[1]))
+
+        train_df = task_df.iloc[:train_end]
+        val_df = task_df.iloc[train_end:val_end]
+        test_df = task_df.iloc[val_end:]
         
         return TaskConfig(
             train_paths=train_df['img_path'].tolist(),
+            val_paths=val_df['img_path'].tolist(),
             test_paths=test_df['img_path'].tolist(),
             train_labels=train_df[CLASS_IDX_COLUMN_NAME].tolist(),
+            val_labels=val_df[CLASS_IDX_COLUMN_NAME].tolist(),
             test_labels=test_df[CLASS_IDX_COLUMN_NAME].tolist(),
             train_coords=train_df['location'].tolist(),
+            val_coords=val_df['location'].tolist(),
             test_coords=test_df['location'].tolist()
         )
-
-    def _calculate_split_point(self, n: int) -> int:
-        split_ratio = float(self.train_test_split[0]) if isinstance(self.train_test_split[0], str) else self.train_test_split[0]
-        return int(n * split_ratio)

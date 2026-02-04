@@ -37,7 +37,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "avalanche-lib", specifier = ">=0.6.0" },
+    { name = "avalanche-lib", specifier = "==0.6" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "pandas", specifier = ">=3.0.0" },
 ]

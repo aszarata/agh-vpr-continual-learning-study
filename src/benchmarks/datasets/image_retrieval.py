@@ -16,13 +16,13 @@ class ImageRetrievalDataset(BaseImageDataset):
         strategy: StrategyType = "class"
     ):
         super().__init__(root_dir, img_size, image_paths)
-        self.labels = labels
+        self.targets = labels
         self.coordinates = coordinates
         self.strategy = strategy
 
         self.class_indices = {
-            c: np.where(self.labels == c)[0] 
-            for c in np.unique(self.labels)
+            c: np.where(self.targets == c)[0] 
+            for c in np.unique(self.targets)
         }
 
         if strategy == "class" and labels is None:
@@ -39,7 +39,7 @@ class ImageRetrievalDataset(BaseImageDataset):
         return (anchor, positive, negative), -1
 
     def __get_triplet_class_strategy(self, idx):
-        anchor_label = self.labels[idx]
+        anchor_label = self.targets[idx]
         positive_ids = self.class_indices[anchor_label]
         positive_ids_filtered = positive_ids[positive_ids != idx]
 
