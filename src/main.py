@@ -26,9 +26,10 @@ num_epochs = 20
 batch_size = 16
 starting_lr = 0.01
 momentum = 0.7
+train_val_test_split = [0.7, 0.1, 0.2]
 
 # === INIT ===
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_dir = f"runs/{EXPERIMENT_NAME}/{timestamp}"
 os.makedirs(log_dir, exist_ok=True)
 
@@ -42,7 +43,8 @@ if torch.cuda.is_available():
 
 df = read_and_prepare_metadata()
 splitter = TaskSplitter(
-    group_by="camera_type"
+    group_by="camera_type",
+    split_ratios=train_val_test_split,
 )
 benchmark_factory = BenchmarkFactory(DATASET_ROOT, IMG_SIZE)
 
@@ -88,6 +90,28 @@ strategies = {
         plugins=[early_stopping, scheduler_plugin],
         device=device,
     ),
+    "Replay": Replay(
+        model, 
+        optimizer, 
+        criterion,
+        mem_size=500, 
+        train_mb_size=batch_size, 
+        train_epochs=num_epochs, 
+        evaluator=eval_plugin,
+        plugins=[early_stopping, scheduler_plugin],
+        device=device,
+    ),
+    "EWC": EWC(
+        model, 
+        optimizer, 
+        criterion,
+        ewc_lambda=0.4, 
+        train_mb_size=batch_size, 
+        train_epochs=num_epochs, 
+        evaluator=eval_plugin,
+        plugins=[early_stopping, scheduler_plugin],
+        device=device,
+    )
 }
 
 # === EXPERIMENTS ===
