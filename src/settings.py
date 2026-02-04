@@ -2,6 +2,7 @@ DATASET_ROOT = "dataset"
 METADATA_FILENAME = "metadata.csv"
 
 IMG_SIZE = 512
+RANDOM_SEED = 42
 
 DEFAULT_CLASS_MAPPING = {
     'Corridor1': 0,
