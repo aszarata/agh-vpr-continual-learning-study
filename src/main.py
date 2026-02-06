@@ -18,6 +18,7 @@ from src.utils.data import read_and_prepare_metadata
 from src.models.torch_models import get_resnet18_for_cl
 from src.scenarios.task_splitters import TaskSplitter
 from src.benchmarks.benchmark_factory import BenchmarkFactory
+from src.configuration.strategies import get_strategy
 
 # === CONFIGURATION ===
 EXPERIMENT_NAME = "camera-domain-all-separate-naive-01"
@@ -31,13 +32,17 @@ train_val_test_split = [0.7, 0.1, 0.2]
 # === INIT ===
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_dir = f"runs/{EXPERIMENT_NAME}/{timestamp}"
+weights_dir = log_dir + "/weights"
 os.makedirs(log_dir, exist_ok=True)
+os.makedirs(weights_dir, exist_ok=True)
 
 device = 'cpu'
 if torch.cuda.is_available():
     device = 'cuda'
 # elif torch.backends.mps.is_available():
 #     device = 'mps'
+
+print(f"Using device: {device}")
 
 # === TASKS ===
 
@@ -70,7 +75,7 @@ eval_plugin = EvaluationPlugin(
 early_stopping = EarlyStoppingPlugin(
     patience=6, 
     val_stream_name='valid_stream', 
-    metric_name='Top1_Acc_Epoch/eval_phase/valid_stream'
+    metric_name='Top1_Acc_Epoch/eval_phase/valid_stream/Exp000'
 )
 
 scheduler_plugin = LRSchedulerPlugin(
@@ -78,57 +83,43 @@ scheduler_plugin = LRSchedulerPlugin(
     metric="val_loss"
 )
 
-strategies = {
-    "Naive": Naive(
-        model, 
-        optimizer, 
-        criterion,
-        train_mb_size=batch_size, 
-        train_epochs=num_epochs, 
-        eval_mb_size=batch_size, 
-        evaluator=eval_plugin,
-        plugins=[early_stopping, scheduler_plugin],
-        device=device,
-    ),
-    "Replay": Replay(
-        model, 
-        optimizer, 
-        criterion,
-        mem_size=500, 
-        train_mb_size=batch_size, 
-        train_epochs=num_epochs, 
-        evaluator=eval_plugin,
-        plugins=[early_stopping, scheduler_plugin],
-        device=device,
-    ),
-    "EWC": EWC(
-        model, 
-        optimizer, 
-        criterion,
-        ewc_lambda=0.4, 
-        train_mb_size=batch_size, 
-        train_epochs=num_epochs, 
-        evaluator=eval_plugin,
-        plugins=[early_stopping, scheduler_plugin],
-        device=device,
-    )
-}
-
 # === EXPERIMENTS ===
 
 for i, config in enumerate(configs):
     print(f"Task {i}: train={len(config.train_paths)}, test={len(config.test_paths)}")
 
-strategy: SupervisedTemplate = strategies[strategy_name]
+strategy: SupervisedTemplate = get_strategy(
+    name="Naive", 
+    model=model, 
+    optimizer=optimizer, 
+    criterion=criterion, 
+    batch_size=batch_size, 
+    num_epochs=num_epochs, 
+    evaluation_plugin=eval_plugin, 
+    plugins=[early_stopping, scheduler_plugin], 
+    device=device,
+)
     
 for experience in benchmark.train_stream:
+
     if experience.current_experience > 0:
         for g in strategy.optimizer.param_groups:
             g['lr'] = 0.001
+    
+    scheduler_plugin.scheduler = scheduler.ReduceLROnPlateau(
+        optimizer, 
+        patience=3
+    )
+
     print(f"Training on domain: {experience.current_experience}")
-    strategy.train(experience, eval_streams=[benchmark.valid_stream])
+    strategy.train(experience, eval_streams=[benchmark.valid_stream[experience.current_experience]])
     
     print("Evaluation")
     strategy.eval(benchmark.test_stream)
+
+    torch.save(
+        strategy.model.state_dict(), 
+        os.path.join(weights_dir, f"model_weights_exp{experience.current_experience}.pth")
+    )
 
 print(f"Finished. Saved in: {log_dir}")
