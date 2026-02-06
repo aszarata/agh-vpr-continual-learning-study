@@ -106,11 +106,6 @@ for experience in benchmark.train_stream:
         for g in strategy.optimizer.param_groups:
             g['lr'] = 0.001
     
-    scheduler_plugin.scheduler = scheduler.ReduceLROnPlateau(
-        optimizer, 
-        patience=3
-    )
-
     print(f"Training on domain: {experience.current_experience}")
     strategy.train(experience, eval_streams=[benchmark.valid_stream[experience.current_experience]])
     
