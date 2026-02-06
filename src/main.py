@@ -15,7 +15,7 @@ from avalanche.training.plugins import EarlyStoppingPlugin, LRSchedulerPlugin
 
 from src.settings import *
 from src.utils.data import read_and_prepare_metadata
-from src.models.torch_models import get_resnet18_for_cl
+from src.models.torch_models import get_resnet18_for_cl, get_resnet34_for_cl
 from src.scenarios.task_splitters import TaskSplitter
 from src.benchmarks.benchmark_factory import BenchmarkFactory
 from src.configuration.strategies import get_strategy
@@ -56,7 +56,7 @@ benchmark_factory = BenchmarkFactory(DATASET_ROOT, IMG_SIZE)
 configs = splitter.split(df)
 benchmark = benchmark_factory.build_img_classification_benchmark(configs)
 
-model = get_resnet18_for_cl(9, False)
+model = get_resnet34_for_cl(9, False)
 criterion = nn.CrossEntropyLoss()
 
 # === STRATEGIES AND PLUGINS ===
