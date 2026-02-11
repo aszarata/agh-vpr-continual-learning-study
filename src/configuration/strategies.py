@@ -91,7 +91,6 @@ def get_strategy(
             model, 
             optimizer, 
             criterion,
-            generator=None,
             replay_size=500,
             train_mb_size=batch_size, 
             train_epochs=num_epochs, 
