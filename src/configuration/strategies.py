@@ -1,4 +1,4 @@
-from avalanche.training.supervised import Naive, Replay, EWC, GenerativeReplay
+from avalanche.training.supervised import Naive, Replay, EWC, GenerativeReplay, LwF, MAS, GEM
 
 def get_strategy(
     name: str, 
@@ -47,7 +47,59 @@ def get_strategy(
             plugins=plugins,
             device=device,
             eval_every=1,
-        )
+        ),
+        "LwF": LwF(
+            model, 
+            optimizer, 
+            criterion,
+            alpha=0.5, 
+            temperature=2.0,
+            train_mb_size=batch_size, 
+            train_epochs=num_epochs, 
+            evaluator=evaluation_plugin,
+            plugins=plugins,
+            device=device,
+            eval_every=1,
+        ),
+        "MAS": MAS(
+            model, 
+            optimizer, 
+            criterion,
+            lambda_reg=1.0,
+            alpha=0.5,
+            train_mb_size=batch_size, 
+            train_epochs=num_epochs, 
+            evaluator=evaluation_plugin,
+            plugins=plugins,
+            device=device,
+            eval_every=1,
+        ),
+        "GEM": GEM(
+            model, 
+            optimizer, 
+            criterion,
+            patterns_per_exp=256,
+            memory_strength=0.5,
+            train_mb_size=batch_size, 
+            train_epochs=num_epochs, 
+            evaluator=evaluation_plugin,
+            plugins=plugins,
+            device=device,
+            eval_every=1,
+        ),
+        "GenerativeReplay": GenerativeReplay(
+            model, 
+            optimizer, 
+            criterion,
+            generator=None,
+            replay_size=500,
+            train_mb_size=batch_size, 
+            train_epochs=num_epochs, 
+            evaluator=evaluation_plugin,
+            plugins=plugins,
+            device=device,
+            eval_every=1,
+        ),
     }
 
     return strategies[name]
