@@ -22,7 +22,7 @@ class TaskSplitter:
         group_by: str, 
         keys_per_task: List[List[str|int]] = None, 
         split_ratios: List[float] = [0.7, 0.15, 0.15],
-        shuffle: bool = True
+        shuffle: bool = False
     ):
         self.group_by = group_by
         self.keys_per_task = keys_per_task
