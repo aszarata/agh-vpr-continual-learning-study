@@ -20,9 +20,8 @@ from src.benchmarks.benchmark_factory import BenchmarkFactory
 from src.configuration.strategies import get_strategy
 
 def run_experiment(cfg):
-    # === CONFIGURATION ===
-    EXPERIMENT_NAME = cfg["EXPERIMENT_NAME"]
-    strategy_name = cfg["strategy_name"]
+    experiment_name = cfg["EXPERIMENT_NAME"]
+    strategies = cfg["strategies"]
     num_epochs = cfg["num_epochs"]
     batch_size = cfg["batch_size"]
     starting_lr = cfg["starting_lr"]
@@ -30,22 +29,12 @@ def run_experiment(cfg):
     momentum = cfg["momentum"]
     train_val_test_split = cfg["train_val_test_split"]
 
-    # === INIT ===
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_dir = f"runs/{EXPERIMENT_NAME}/{timestamp}"
-    weights_dir = log_dir + "/weights"
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(weights_dir, exist_ok=True)
+    base_log_dir = os.path.join("runs", experiment_name, timestamp)
+    os.makedirs(base_log_dir, exist_ok=True)
 
-    device = 'cpu'
-    if torch.cuda.is_available():
-        device = 'cuda'
-    # elif torch.backends.mps.is_available():
-    #     device = 'mps'
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
-    # === TASKS ===
 
     df = read_and_prepare_metadata()
     splitter = TaskSplitter(
@@ -53,75 +42,80 @@ def run_experiment(cfg):
         split_ratios=train_val_test_split,
     )
     benchmark_factory = BenchmarkFactory(DATASET_ROOT, IMG_SIZE)
-
     configs = splitter.split(df)
     benchmark = benchmark_factory.build_img_classification_benchmark(configs)
-
-    model = get_resnet34_for_cl(9, False)
-    criterion = nn.CrossEntropyLoss()
-
-    # === STRATEGIES AND PLUGINS ===
-    optimizer = optim.SGD(model.parameters(), lr=starting_lr, momentum=momentum,)
-
-    eval_plugin = EvaluationPlugin(
-        accuracy_metrics(epoch=True, experience=True, stream=True),
-        loss_metrics(epoch=True, experience=True, stream=True),
-        forgetting_metrics(experience=True, stream=True),
-        bwt_metrics(experience=True, stream=True),
-        MAC_metrics(minibatch=True, epoch=True, experience=True),
-        timing_metrics(minibatch=True, experience=True, stream=True),
-        loggers=[
-            InteractiveLogger(), 
-            TensorboardLogger(log_dir)
-        ],
-    )
-
-    early_stopping = EarlyStoppingPlugin(
-        patience=6, 
-        val_stream_name='valid_stream', 
-        metric_name='Top1_Acc_Epoch/eval_phase/valid_stream/Exp000'
-    )
-
-    scheduler_plugin = LRSchedulerPlugin(
-        scheduler.ReduceLROnPlateau(optimizer, patience=3),
-        metric="val_loss"
-    )
-
-    # === EXPERIMENTS ===
 
     for i, config in enumerate(configs):
         print(f"Task {splitter.task_id_to_name[i]}: train={len(config.train_paths)}, test={len(config.test_paths)}")
 
-    strategy: SupervisedTemplate = get_strategy(
-        name=strategy_name, 
-        model=model, 
-        optimizer=optimizer, 
-        criterion=criterion, 
-        batch_size=batch_size, 
-        num_epochs=num_epochs, 
-        evaluation_plugin=eval_plugin, 
-        plugins=[early_stopping, scheduler_plugin], 
-        device=device,
-    )
+    for strategy_name in strategies:
+        print(f"\n=== Starting Strategy: {strategy_name} ===")
         
-    for experience in benchmark.train_stream:
+        current_log_dir = os.path.join(base_log_dir, strategy_name)
+        weights_dir = os.path.join(current_log_dir, "weights")
+        os.makedirs(weights_dir, exist_ok=True)
 
-        if experience.current_experience > 0:
-            for g in strategy.optimizer.param_groups:
-                g['lr'] = next_lr
-        
-        print(f"Training on domain: {experience.current_experience}")
-        strategy.train(experience, eval_streams=[benchmark.valid_stream[experience.current_experience]])
-        
-        print("Evaluation")
-        strategy.eval(benchmark.test_stream)
+        model = get_resnet34_for_cl(9, False)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.SGD(model.parameters(), lr=starting_lr, momentum=momentum)
 
-        torch.save(
-            strategy.model.state_dict(), 
-            os.path.join(weights_dir, f"model_weights_exp{experience.current_experience}.pth")
+        eval_plugin = EvaluationPlugin(
+            accuracy_metrics(epoch=True, experience=True, stream=True),
+            loss_metrics(epoch=True, experience=True, stream=True),
+            forgetting_metrics(experience=True, stream=True),
+            bwt_metrics(experience=True, stream=True),
+            MAC_metrics(minibatch=True, epoch=True, experience=True),
+            timing_metrics(minibatch=True, experience=True, stream=True),
+            loggers=[
+                InteractiveLogger(), 
+                TensorboardLogger(current_log_dir)
+            ],
         )
 
-    print(f"Finished. Saved in: {log_dir}")
+        early_stopping = EarlyStoppingPlugin(
+            patience=6, 
+            val_stream_name='valid_stream', 
+            metric_name='Top1_Acc_Epoch/eval_phase/valid_stream/Exp000'
+        )
+
+        scheduler_plugin = LRSchedulerPlugin(
+            scheduler.ReduceLROnPlateau(optimizer, patience=3),
+            metric="val_loss"
+        )
+
+        strategy: SupervisedTemplate = get_strategy(
+            name=strategy_name, 
+            model=model, 
+            optimizer=optimizer, 
+            criterion=criterion, 
+            batch_size=batch_size, 
+            num_epochs=num_epochs, 
+            evaluation_plugin=eval_plugin, 
+            plugins=[early_stopping, scheduler_plugin], 
+            device=device,
+        )
+            
+        for experience in benchmark.train_stream:
+            if experience.current_experience > 0:
+                for g in strategy.optimizer.param_groups:
+                    g['lr'] = next_lr
+            
+            print(f"[{strategy_name}] Training on domain: {experience.current_experience}")
+            strategy.train(experience, eval_streams=[benchmark.valid_stream[experience.current_experience]])
+            
+            print(f"[{strategy_name}] Evaluation")
+            strategy.eval(benchmark.test_stream)
+
+            torch.save(
+                strategy.model.state_dict(), 
+                os.path.join(weights_dir, f"model_weights_exp{experience.current_experience}.pth")
+            )
+
+    print(f"All experiments finished. Global logs saved in: {base_log_dir}")
+
+if __name__ == "__main__":
+    config_data = get_config()
+    run_experiment(config_data)
 
 if __name__ == "__main__":
     config_data = get_config()

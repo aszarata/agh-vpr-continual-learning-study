@@ -6,6 +6,10 @@ starting_lr: 0.01
 next_lr: 0.001
 momentum: 0.7
 
-strategy_name: Naive
+strategies:
+  - Naive
+  - EWC
+  - Replay
+  - GenerativeReplay
 
 train_val_test_split: [0.7, 0.1, 0.2]
