@@ -1,0 +1,11 @@
+EXPERIMENT_NAME: "naive-domain-camera-01"
+
+num_epochs: 20
+batch_size: 16
+starting_lr: 0.01
+next_lr: 0.001
+momentum: 0.7
+
+strategy_name: Naive
+
+train_val_test_split: [0.7, 0.1, 0.2]

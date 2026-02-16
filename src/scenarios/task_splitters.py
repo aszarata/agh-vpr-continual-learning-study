@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import numpy as np
 import pandas as pd
 from src.settings import *
@@ -28,6 +28,7 @@ class TaskSplitter:
         self.keys_per_task = keys_per_task
         self.split_ratios = split_ratios
         self.shuffle = shuffle
+        self.task_id_to_name: Dict[int, str] = {}
 
     def split(self, df: pd.DataFrame) -> List[TaskConfig]:
         if self.keys_per_task is None:
@@ -35,6 +36,14 @@ class TaskSplitter:
             if self.shuffle:
                 np.random.shuffle(unique_keys)
             self.keys_per_task = [[key] for key in unique_keys]
+        
+        self.task_id_to_name = {}
+        for i, keys in enumerate(self.keys_per_task):
+            if len(keys) == 1:
+                name = str(keys[0])
+            else:
+                name = '_'.join(map(str, keys))
+            self.task_id_to_name[i] = name
             
         return [self._create_task_for_keys(df, keys) for keys in self.keys_per_task]
 
