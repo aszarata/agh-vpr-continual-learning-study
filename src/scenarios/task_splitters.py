@@ -22,7 +22,7 @@ class TaskSplitter:
         group_by: str, 
         keys_per_task: List[List[str|int]] = None, 
         split_ratios: List[float] = [0.7, 0.15, 0.15],
-        shuffle: bool = False
+        shuffle: bool = True
     ):
         self.group_by = group_by
         self.keys_per_task = keys_per_task
@@ -33,8 +33,6 @@ class TaskSplitter:
     def split(self, df: pd.DataFrame) -> List[TaskConfig]:
         if self.keys_per_task is None:
             unique_keys = df[self.group_by].unique()
-            if self.shuffle:
-                np.random.shuffle(unique_keys)
             self.keys_per_task = [[key] for key in unique_keys]
         
         self.task_id_to_name = {}
